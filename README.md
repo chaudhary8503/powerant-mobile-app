@@ -44,7 +44,7 @@ npx serve .
 # or VS Code: install the "Live Server" extension, right-click index.html → Open with Live Server
 ```
 
-First run: click **Admin** (top right) → sign in → enter a, b, c, d → **Confirm**. Then go back and test the client side.
+First run: click **Admin** (top right) → sign in. The admin menu provides **Set material prices** and **View factory prices**. The public calculator shows only the minimum-to-maximum shop range. It adds 10% and 25% to the calculated internal rate. For example, an internal rate of Rs 1,000 displays as Rs 1,100 to Rs 1,250. The factory rate can be viewed only through the authenticated admin option.
 
 ## 5. Put it online
 

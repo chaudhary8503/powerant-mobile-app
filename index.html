@@ -4,42 +4,54 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#14161a">
-<title>Daily Rate</title>
+<title>Rate Calculator</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
 <div id="app">
 
-  <!-- ================= SCREEN 1 : CALCULATOR ================= -->
+  <!-- ================= SCREEN 1 : CLIENT CALCULATOR ================= -->
   <section class="screen is-active" id="screen-calc">
     <header class="bar">
       <span class="bar-spacer"></span>
-      <h1 class="bar-title">Daily Rate</h1>
+      <h1 class="bar-title" id="calc-title">Shop Rate</h1>
       <button class="bar-btn bar-btn-right" id="btn-to-login" aria-label="Admin login">Admin</button>
     </header>
 
     <main class="pad">
       <p class="lede">Enter your requirement</p>
 
+      <div class="toggle" role="group" aria-label="Wire type">
+        <button type="button" class="toggle-btn is-on" data-type="flexible">Flexible</button>
+        <button type="button" class="toggle-btn" data-type="standard">Standard</button>
+      </div>
+
       <label class="field">
         <span class="field-label">Wires</span>
-        <input type="number" id="in-wires" inputmode="decimal" placeholder="0" autocomplete="off">
+        <input type="number" id="in-wires" inputmode="numeric" placeholder="0" autocomplete="off">
       </label>
 
       <label class="field">
         <span class="field-label">Thousands</span>
-        <input type="number" id="in-thousands" inputmode="decimal" placeholder="0" autocomplete="off">
+        <input type="number" id="in-thousands" inputmode="numeric" placeholder="0" autocomplete="off">
       </label>
 
       <label class="field">
         <span class="field-label">MM</span>
-        <input type="number" id="in-mm" inputmode="decimal" placeholder="0" autocomplete="off">
+        <input type="number" id="in-mm" inputmode="decimal" step="any" placeholder="0" autocomplete="off">
       </label>
 
       <label class="field">
         <span class="field-label">Core</span>
-        <input type="number" id="in-core" inputmode="decimal" placeholder="0" autocomplete="off">
+        <input type="number" id="in-core" inputmode="numeric" placeholder="1" autocomplete="off">
+        <span class="field-note">1, 2, 3, 4 or 5</span>
+      </label>
+
+      <label class="field">
+        <span class="field-label">Feet</span>
+        <input type="number" id="in-feet" inputmode="numeric" value="300" autocomplete="off">
+        <span class="field-note">One coil is 300 feet</span>
       </label>
 
       <p class="msg msg-error" id="calc-error" hidden></p>
@@ -53,15 +65,22 @@
   <!-- ================= SCREEN 2 : RESULT ================= -->
   <section class="screen" id="screen-result">
     <header class="bar">
-      <button class="bar-btn bar-btn-left" id="btn-back-calc" aria-label="Back">← Back</button>
-      <h1 class="bar-title">Your Rate</h1>
+      <button class="bar-btn bar-btn-left" id="btn-back-calc" aria-label="Back">&larr; Back</button>
+      <h1 class="bar-title" id="result-title">Minimum to Maximum</h1>
       <span class="bar-spacer"></span>
     </header>
 
     <main class="pad result-pad">
-      <p class="result-caption">Today's rate</p>
-      <p class="result-figure"><span class="result-cur">Rs</span><span id="result-value">0</span></p>
+      <!-- <p class="result-caption">Minimum to maximum</p> -->
+      <p class="result-figure" id="result-single" hidden><span class="result-cur">Rs</span><span id="result-value">0</span></p>
+      <div class="result-range" id="result-range">
+        <div class="range-value"><span class="range-label">Minimum</span><strong><span class="result-cur">Rs</span><span id="result-min">0</span></strong></div>
+        <!-- <span class="range-separator">to</span> -->
+        <div class="range-value"><span class="range-label">Maximum</span><strong><span class="result-cur">Rs</span><span id="result-max">0</span></strong></div>
+      </div>
+      <p class="result-length" id="result-length"></p>
       <div class="result-recap" id="result-recap"></div>
+      <p class="result-stamp" id="result-stamp"></p>
     </main>
 
     <footer class="dock">
@@ -69,16 +88,41 @@
     </footer>
   </section>
 
-  <!-- ================= SCREEN 3 : ADMIN LOGIN ================= -->
+  <!-- ================= SCREEN 3 : ADMIN MENU ================= -->
+  <section class="screen" id="screen-admin-menu">
+    <header class="bar bar-admin">
+      <button class="bar-btn bar-btn-left" id="btn-admin-signout">Sign out</button>
+      <h1 class="bar-title">Admin</h1>
+      <span class="bar-spacer"></span>
+    </header>
+
+    <main class="pad admin-menu-pad">
+      <p class="lede">What would you like to do?</p>
+      <button class="menu-option" id="btn-set-prices">
+        <strong>Set material prices</strong>
+        <span>Update today's factory rates</span>
+      </button>
+      <button class="menu-option" id="btn-view-factory">
+        <strong>View factory prices</strong>
+        <span>Calculate and view the exact factory rate</span>
+      </button>
+    </main>
+
+    <footer class="dock">
+      <button class="btn btn-quiet" id="btn-back-from-admin-menu">Back to calculator</button>
+    </footer>
+  </section>
+
+  <!-- ================= SCREEN 4 : ADMIN LOGIN ================= -->
   <section class="screen" id="screen-login">
     <header class="bar">
-      <button class="bar-btn bar-btn-left" id="btn-back-from-login" aria-label="Back">← Back</button>
+      <button class="bar-btn bar-btn-left" id="btn-back-from-login" aria-label="Back">&larr; Back</button>
       <h1 class="bar-title">Admin</h1>
       <span class="bar-spacer"></span>
     </header>
 
     <main class="pad">
-      <p class="lede">Sign in to update today's parameters.</p>
+      <p class="lede">Sign in to update today's rates.</p>
 
       <label class="field">
         <span class="field-label">Email</span>
@@ -87,7 +131,10 @@
 
       <label class="field">
         <span class="field-label">Password</span>
-        <input type="password" id="in-password" autocomplete="current-password" placeholder="••••••••">
+        <span class="password-wrap">
+          <input type="password" id="in-password" autocomplete="current-password" placeholder="Password">
+          <button type="button" class="password-toggle" id="btn-toggle-password" aria-label="Show password" title="Show password">&#128065;</button>
+        </span>
       </label>
 
       <p class="msg msg-error" id="login-error" hidden></p>
@@ -98,47 +145,80 @@
     </footer>
   </section>
 
-  <!-- ================= SCREEN 4 : ADMIN PANEL ================= -->
+  <!-- ================= SCREEN 5 : ADMIN PANEL ================= -->
   <section class="screen" id="screen-admin">
     <header class="bar bar-admin">
       <button class="bar-btn bar-btn-left" id="btn-signout">Sign out</button>
-      <h1 class="bar-title">Parameters</h1>
+      <h1 class="bar-title">Today's Rates</h1>
       <span class="bar-spacer"></span>
     </header>
 
     <main class="pad">
-      <p class="datestamp" id="admin-date">—</p>
+      <p class="datestamp" id="admin-date">&mdash;</p>
+
+      <p class="group-head">Material rates</p>
+
+      <label class="field">
+        <span class="field-label">Copper rate &mdash; Rs per kg</span>
+        <input type="number" id="in-copper" inputmode="decimal" step="any" placeholder="0">
+      </label>
+
+      <label class="field">
+        <span class="field-label">PVC rate &mdash; Rs per kg</span>
+        <input type="number" id="in-pvc" inputmode="decimal" step="any" placeholder="0">
+      </label>
+
+      <label class="field">
+        <span class="field-label">Rope rate &mdash; Rs per metre, per rope</span>
+        <input type="number" id="in-rope" inputmode="decimal" step="any" placeholder="0">
+        <span class="field-note">3 core uses 3 ropes &nbsp;&bull;&nbsp; 4 core uses 5 ropes &nbsp;&bull;&nbsp; 1 and 2 core use none</span>
+      </label>
+
+      <p class="group-head">Drawing charge &mdash; Rs per kg of copper</p>
 
       <div class="grid2">
         <label class="field">
-          <span class="field-label">a</span>
-          <input type="number" id="in-a" inputmode="decimal" step="any" placeholder="0">
+          <span class="field-label">Flexible</span>
+          <input type="number" id="in-draw-flex" inputmode="decimal" step="any" placeholder="0">
         </label>
         <label class="field">
-          <span class="field-label">b</span>
-          <input type="number" id="in-b" inputmode="decimal" step="any" placeholder="0">
-        </label>
-        <label class="field">
-          <span class="field-label">c</span>
-          <input type="number" id="in-c" inputmode="decimal" step="any" placeholder="0">
-        </label>
-        <label class="field">
-          <span class="field-label">d</span>
-          <input type="number" id="in-d" inputmode="decimal" step="any" placeholder="0">
+          <span class="field-label">Standard</span>
+          <input type="number" id="in-draw-std" inputmode="decimal" step="any" placeholder="0">
         </label>
       </div>
 
-      <p class="hint" id="admin-lastsaved">—</p>
+      <p class="group-head">Overheads &mdash; % of material + drawing</p>
+
+      <div class="grid2">
+        <label class="field">
+          <span class="field-label">Electricity %</span>
+          <input type="number" id="in-elec" inputmode="decimal" step="any" placeholder="0">
+        </label>
+        <label class="field">
+          <span class="field-label">Labour %</span>
+          <input type="number" id="in-labour" inputmode="decimal" step="any" placeholder="0">
+        </label>
+        <label class="field">
+          <span class="field-label">Other material %</span>
+          <input type="number" id="in-other" inputmode="decimal" step="any" placeholder="0">
+        </label>
+        <label class="field">
+          <span class="field-label">Profit margin %</span>
+          <input type="number" id="in-margin" inputmode="decimal" step="any" placeholder="5">
+        </label>
+      </div>
+
+      <p class="hint" id="admin-lastsaved">&mdash;</p>
       <p class="msg msg-ok" id="admin-ok" hidden></p>
       <p class="msg msg-error" id="admin-error" hidden></p>
     </main>
 
     <footer class="dock">
       <button class="btn btn-go" id="btn-confirm">Confirm</button>
+      <button class="btn btn-quiet" id="btn-back-from-admin" type="button">Back to admin</button>
     </footer>
   </section>
 
-  <!-- ================= LOADING VEIL ================= -->
   <div id="veil"><span class="veil-dot"></span></div>
 
 </div>
