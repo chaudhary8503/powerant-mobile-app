@@ -95,7 +95,8 @@ function calculateRate(p, v) {
   const margin      = factoryCost * (p.marginPct / 100);
 
   return {
-    copperKg, pvcKg, ropes, ropeCost, drawCost,
+    copperKg, pvcKg, ropes, metres, copperCost, pvcCost, ropeCost,
+    drawRate, drawCost, base, electricity, labour, other,
     material, factoryCost, margin,
     factoryRate: factoryCost + margin,
   };
@@ -110,20 +111,40 @@ const db   = getFirestore(app);
 
 const PARAMS_DOC = doc(db, "settings", "daily");
 
+// An admin session lasts this long from the moment of sign-in,
+// no matter how active the admin is. After that they are signed
+// out and must enter their password again.
+const ADMIN_SESSION_TTL_MS = 60 * 60 * 1000;
+
 const $ = (id) => document.getElementById(id);
 
 const screens = {
-  calc:   $("screen-calc"),
-  result: $("screen-result"),
-  login:  $("screen-login"),
-  adminMenu: $("screen-admin-menu"),
-  admin:  $("screen-admin"),
+  calc:        $("screen-calc"),
+  result:      $("screen-result"),
+  login:       $("screen-login"),
+  adminMenu:   $("screen-admin-menu"),
+  adminCalc:   $("screen-admin-calc"),
+  adminResult: $("screen-admin-result"),
+  admin:       $("screen-admin"),
 };
 
+// Screens reachable only while signed OUT. Every other screen is
+// reachable only while signed IN. A signed-in admin can never see
+// the shop calculator - the only way back to it is signing out.
+const PUBLIC_SCREENS = new Set(["calc", "result", "login"]);
+
 function show(name) {
+  const signedIn = !!auth.currentUser;
+  if (signedIn  &&  PUBLIC_SCREENS.has(name)) name = "adminMenu";
+  if (!signedIn && !PUBLIC_SCREENS.has(name)) name = "login";
+
   Object.values(screens).forEach(s => s.classList.remove("is-active"));
   screens[name].classList.add("is-active");
   window.scrollTo(0, 0);
+}
+
+function currentScreen() {
+  return Object.keys(screens).find(k => screens[k].classList.contains("is-active"));
 }
 
 const veil = $("veil");
@@ -157,121 +178,255 @@ function readParams(raw) {
 }
 
 /* ============================================================
-   4. SCREEN 1 - CLIENT CALCULATOR
+   4. ADMIN SESSION
+   The expiry is measured from the ID token's auth_time - the
+   moment the password was entered. Token refreshes do not move
+   it, so the session cannot be stretched past one hour.
    ============================================================ */
-const calcError = $("calc-error");
+let expiryTimer = null;
 
-let wireType = "flexible";
-let resultMode = "shop";
+async function checkAdminSession() {
+  const user = auth.currentUser;
+  if (!user) return false;
 
-function setResultMode(mode) {
-  resultMode = mode;
-  const isFactoryView = mode === "factory";
-  $("calc-title").textContent = isFactoryView ? "Factory Rate" : "Shop Rate";
-  $("result-title").textContent = isFactoryView ? "Factory Rate" : "Minimum to Maximum";
+  let expiresAt = 0;
+  try {
+    const { authTime } = await user.getIdTokenResult();
+    expiresAt = Date.parse(authTime) + ADMIN_SESSION_TTL_MS;
+  } catch (err) {
+    // Token could not be read or refreshed - treat as expired.
+    console.error(err);
+  }
+
+  if (!(Date.now() < expiresAt)) {
+    await endAdminSession("expired");
+    return false;
+  }
+
+  clearTimeout(expiryTimer);
+  expiryTimer = setTimeout(checkAdminSession, expiresAt - Date.now() + 500);
+  return true;
 }
 
-document.querySelectorAll("[data-type]").forEach(btn => {
-  btn.addEventListener("click", () => {
-    wireType = btn.dataset.type;
-    document.querySelectorAll("[data-type]").forEach(b =>
-      b.classList.toggle("is-on", b === btn));
+async function endAdminSession(reason) {
+  clearTimeout(expiryTimer);
+  expiryTimer = null;
+  await signOut(auth).catch(() => {});
+  resetAdminCalc();
+  hush(loginError);
+
+  if (reason === "expired") {
+    show("login");
+    say(loginError, "Your session has expired. Please sign in again.");
+  } else {
+    show("calc");
+  }
+}
+
+// Phones pause timers in the background - re-check on return.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") checkAdminSession();
+});
+
+/* ============================================================
+   5. SHARED CALCULATOR HELPERS
+   ============================================================ */
+const calcError      = $("calc-error");
+const adminCalcError = $("admin-calc-error");
+
+// Each calculator keeps its own Flexible / Standard choice.
+const wireType = { calc: "flexible", adminCalc: "flexible" };
+
+document.querySelectorAll(".toggle").forEach(group => {
+  const key = group.closest(".screen") === screens.adminCalc ? "adminCalc" : "calc";
+  const btns = group.querySelectorAll("[data-type]");
+  btns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      wireType[key] = btn.dataset.type;
+      btns.forEach(b => b.classList.toggle("is-on", b === btn));
+    });
   });
 });
 
-$("btn-ok").addEventListener("click", async () => {
-  hush(calcError);
-
+function validateAndPrepareCalcForm(errorEl, type, fields) {
   const v = {
-    type:      wireType,
-    wires:     parseFloat($("in-wires").value),
-    thousands: parseFloat($("in-thousands").value),
-    mm:        parseFloat($("in-mm").value),
-    core:      parseFloat($("in-core").value),
-    feet:      parseFloat($("in-feet").value),
+    type,
+    wires:     parseFloat(fields.wires.value),
+    thousands: parseFloat(fields.thousands.value),
+    mm:        parseFloat(fields.mm.value),
+    core:      parseFloat(fields.core.value),
+    feet:      parseFloat(fields.feet.value),
   };
 
   const nums = [v.wires, v.thousands, v.mm, v.core, v.feet];
   if (nums.some(n => !Number.isFinite(n))) {
-    say(calcError, "Fill in all five boxes with numbers.");
-    return;
+    say(errorEl, "Fill in all five boxes with numbers.");
+    return null;
   }
   if (nums.some(n => n <= 0)) {
-    say(calcError, "All numbers must be more than zero.");
-    return;
+    say(errorEl, "All numbers must be more than zero.");
+    return null;
   }
   if (!(v.core in PVC_PER_COIL[v.type])) {
-    say(calcError, "Core must be 1, 2, 3, 4 or 5.");
-    return;
+    say(errorEl, "Core must be 1, 2, 3, 4 or 5.");
+    return null;
   }
   const sizesForType = PVC_PER_COIL[v.type][v.core];
   if (!(v.mm in sizesForType)) {
     const typeLabel = v.type === "standard" ? "Standard" : "Flexible";
-    say(calcError,
+    say(errorEl,
       `For ${typeLabel}, ${v.core} core, MM must be one of: ` +
       Object.keys(sizesForType).join(", ") +
       ". Other sizes are not available yet.");
-    return;
+    return null;
   }
+
+  return v;
+}
+
+function lengthLabel(v) {
+  return `for ${v.feet.toLocaleString("en-PK")} feet` +
+    (v.feet % COIL_FEET === 0
+      ? ` (${v.feet / COIL_FEET} coil${v.feet === COIL_FEET ? "" : "s"})`
+      : "");
+}
+
+function recapHtml(v) {
+  const typeLabel = v.type === "standard" ? "Standard" : "Flexible";
+  return `<span class="chip">${typeLabel}</span>
+     <span class="chip">Wires <b>${v.wires}</b></span>
+     <span class="chip">Thousands <b>${v.thousands}</b></span>
+     <span class="chip">MM <b>${v.mm}</b></span>
+     <span class="chip">Core <b>${v.core}</b></span>`;
+}
+
+function stampLabel(data) {
+  return data.updatedAt
+    ? `Rates updated ${new Date(data.updatedAt).toLocaleDateString("en-GB")}`
+    : "";
+}
+
+function renderRateBreakdown(p, r) {
+  const rs  = (n) => "Rs " + money(Math.round(n));
+  const kg  = (n) => n.toLocaleString("en-PK", { maximumFractionDigits: 2 });
+  const pct = (n) => n.toLocaleString("en-PK", { maximumFractionDigits: 2 });
+
+  $("bd-copper").textContent = rs(r.copperCost);
+  $("bd-copper-calc").textContent =
+    `${kg(r.copperKg)} kg × ${rs(p.copperRate)}/kg = ${rs(r.copperCost)}`;
+
+  $("bd-pvc").textContent = rs(r.pvcCost);
+  $("bd-pvc-calc").textContent =
+    `${kg(r.pvcKg)} kg × ${rs(p.pvcRate)}/kg = ${rs(r.pvcCost)}`;
+
+  $("bd-rope").textContent = rs(r.ropeCost);
+  $("bd-rope-calc").textContent = r.ropes > 0
+    ? `${kg(r.metres)} m × ${r.ropes} ropes × ${rs(p.ropeRate)}/m = ${rs(r.ropeCost)}`
+    : "No ropes used for this core count";
+
+  $("bd-draw").textContent = rs(r.drawCost);
+  $("bd-draw-calc").textContent =
+    `${kg(r.copperKg)} kg × ${rs(r.drawRate)}/kg = ${rs(r.drawCost)}`;
+
+  $("bd-elec").textContent = rs(r.electricity);
+  $("bd-elec-calc").textContent =
+    `${rs(r.base)} × ${pct(p.elecPct)}% = ${rs(r.electricity)}`;
+
+  $("bd-labour").textContent = rs(r.labour);
+  $("bd-labour-calc").textContent =
+    `${rs(r.base)} × ${pct(p.labourPct)}% = ${rs(r.labour)}`;
+
+  $("bd-other").textContent = rs(r.other);
+  $("bd-other-calc").textContent =
+    `${rs(r.base)} × ${pct(p.otherPct)}% = ${rs(r.other)}`;
+
+  $("bd-factorycost").textContent = rs(r.factoryCost);
+
+  $("bd-marginpct").textContent = p.marginPct;
+  $("bd-margin").textContent = rs(r.margin);
+  $("bd-margin-calc").textContent =
+    `${rs(r.factoryCost)} × ${pct(p.marginPct)}% = ${rs(r.margin)}`;
+}
+
+/* ---------- feet confirmation (shared modal) ---------- */
+const feetConfirm = $("feet-confirm");
+let pending = null;   // { v, mode: "shop" | "factory" }
+
+function askFeet(v, mode) {
+  pending = { v, mode };
+  $("feet-confirm-value").textContent = v.feet.toLocaleString("en-PK");
+  feetConfirm.classList.add("is-on");
+}
+
+$("btn-feet-back").addEventListener("click", () => {
+  pending = null;
+  feetConfirm.classList.remove("is-on");
+});
+
+$("btn-feet-ok").addEventListener("click", async () => {
+  feetConfirm.classList.remove("is-on");
+  const job = pending;
+  pending = null;
+  if (!job) return;
+
+  const isFactory = job.mode === "factory";
+  const errorEl = isFactory ? adminCalcError : calcError;
+  if (isFactory && !(await checkAdminSession())) return;
 
   busy(true);
   try {
     const snap = await getDoc(PARAMS_DOC);
     if (!snap.exists()) {
-      say(calcError, "Today's rates are not set yet. Please try again later.");
+      say(errorEl, "Today's rates are not set yet. Please try again later.");
       return;
     }
     const p = readParams(snap.data());
-    const r = calculateRate(p, v);
+    const r = calculateRate(p, job.v);
 
-    const isFactoryView = resultMode === "factory";
-    $("result-title").textContent = isFactoryView ? "Factory Rate" : "Minimum to Maximum";
-    $("result-single").hidden = !isFactoryView;
-    $("result-range").hidden = isFactoryView;
-    $("result-value").textContent = money(Math.round(r.factoryRate));
-    $("result-min").textContent = money(Math.round(r.factoryRate * 1.10));
-    $("result-max").textContent = money(Math.round(r.factoryRate * 1.25));
-    $("result-length").textContent =
-      `for ${v.feet.toLocaleString("en-PK")} feet` +
-      (v.feet % COIL_FEET === 0
-        ? ` (${v.feet / COIL_FEET} coil${v.feet === COIL_FEET ? "" : "s"})`
-        : "");
-
-    const typeLabel = v.type === "standard" ? "Standard" : "Flexible";
-    $("result-recap").innerHTML =
-      `<span class="chip">${typeLabel}</span>
-       <span class="chip">Wires <b>${v.wires}</b></span>
-       <span class="chip">Thousands <b>${v.thousands}</b></span>
-       <span class="chip">MM <b>${v.mm}</b></span>
-       <span class="chip">Core <b>${v.core}</b></span>`;
-
-    $("result-stamp").textContent = snap.data().updatedAt
-      ? `Rates updated ${new Date(snap.data().updatedAt).toLocaleDateString("en-GB")}`
-      : "";
-
-    show("result");
+    if (isFactory) showFactoryResult(job.v, p, r, snap.data());
+    else           showShopResult(job.v, r, snap.data());
   } catch (err) {
     console.error(err);
-    say(calcError, "Could not load today's rates. Check your internet and try again.");
+    say(errorEl, "Could not load today's rates. Check your internet and try again.");
   } finally {
     busy(false);
   }
 });
 
-$("btn-back-calc").addEventListener("click", () => {
-  show(resultMode === "factory" ? "adminMenu" : "calc");
+/* ============================================================
+   6. SHOP CALCULATOR + RESULT  (signed out only)
+   ============================================================ */
+$("btn-ok").addEventListener("click", () => {
+  hush(calcError);
+  const v = validateAndPrepareCalcForm(calcError, wireType.calc, {
+    wires:     $("in-wires"),
+    thousands: $("in-thousands"),
+    mm:        $("in-mm"),
+    core:      $("in-core"),
+    feet:      $("in-feet"),
+  });
+  if (v) askFeet(v, "shop");
 });
-$("btn-again").addEventListener("click",     () => show("calc"));
+
+function showShopResult(v, r, data) {
+  $("result-min").textContent    = money(Math.round(r.factoryRate * 1.10));
+  $("result-max").textContent    = money(Math.round(r.factoryRate * 1.25));
+  $("result-length").textContent = lengthLabel(v);
+  $("result-recap").innerHTML    = recapHtml(v);
+  $("result-stamp").textContent  = stampLabel(data);
+  show("result");
+}
+
+$("btn-back-calc").addEventListener("click", () => show("calc"));
 
 /* ============================================================
-   5. SCREEN 3 - ADMIN LOGIN
+   7. ADMIN LOGIN
    ============================================================ */
 const loginError = $("login-error");
 
 $("btn-to-login").addEventListener("click", () => {
   hush(loginError);
-  if (auth.currentUser) { show("adminMenu"); }
-  else                  { show("login"); }
+  show("login");
 });
 
 $("btn-back-from-login").addEventListener("click", () => show("calc"));
@@ -290,7 +445,7 @@ $("btn-login").addEventListener("click", async () => {
   try {
     await signInWithEmailAndPassword(auth, email, pass);
     $("in-password").value = "";
-    show("adminMenu");
+    if (await checkAdminSession()) show("adminMenu");
   } catch (err) {
     console.error(err.code);
     say(loginError,
@@ -301,23 +456,6 @@ $("btn-login").addEventListener("click", async () => {
     busy(false);
   }
 });
-
-$("btn-set-prices").addEventListener("click", async () => {
-  show("admin");
-  await loadAdminPanel();
-});
-
-$("btn-view-factory").addEventListener("click", () => {
-  setResultMode("factory");
-  show("calc");
-});
-
-$("btn-back-from-admin-menu").addEventListener("click", () => {
-  setResultMode("shop");
-  show("calc");
-});
-
-$("btn-back-from-admin").addEventListener("click", () => show("adminMenu"));
 
 $("btn-toggle-password").addEventListener("click", () => {
   const passwordInput = $("in-password");
@@ -332,7 +470,63 @@ $("in-password").addEventListener("keydown", (e) => {
 });
 
 /* ============================================================
-   6. SCREEN 4 - ADMIN PANEL
+   8. ADMIN MENU
+   ============================================================ */
+$("btn-set-prices").addEventListener("click", async () => {
+  if (!(await checkAdminSession())) return;
+  show("admin");
+  await loadAdminPanel();
+});
+
+$("btn-view-factory").addEventListener("click", async () => {
+  if (!(await checkAdminSession())) return;
+  hush(adminCalcError);
+  show("adminCalc");
+});
+
+$("btn-admin-signout").addEventListener("click", () => endAdminSession("signout"));
+
+/* ============================================================
+   9. ADMIN FACTORY CALCULATOR + RESULT  (signed in only)
+   ============================================================ */
+const ADMIN_CALC_FIELDS = {
+  wires:     $("in-admin-wires"),
+  thousands: $("in-admin-thousands"),
+  mm:        $("in-admin-mm"),
+  core:      $("in-admin-core"),
+  feet:      $("in-admin-feet"),
+};
+
+function resetAdminCalc() {
+  Object.values(ADMIN_CALC_FIELDS).forEach(el => { el.value = ""; });
+  ADMIN_CALC_FIELDS.feet.value = COIL_FEET;
+  wireType.adminCalc = "flexible";
+  screens.adminCalc.querySelectorAll("[data-type]").forEach(b =>
+    b.classList.toggle("is-on", b.dataset.type === "flexible"));
+  hush(adminCalcError);
+}
+
+$("btn-back-from-admin-calc").addEventListener("click", () => show("adminMenu"));
+
+$("btn-admin-ok").addEventListener("click", () => {
+  hush(adminCalcError);
+  const v = validateAndPrepareCalcForm(adminCalcError, wireType.adminCalc, ADMIN_CALC_FIELDS);
+  if (v) askFeet(v, "factory");
+});
+
+function showFactoryResult(v, p, r, data) {
+  $("admin-result-value").textContent  = money(Math.round(r.factoryRate));
+  $("admin-result-length").textContent = lengthLabel(v);
+  $("admin-result-recap").innerHTML    = recapHtml(v);
+  $("admin-result-stamp").textContent  = stampLabel(data);
+  renderRateBreakdown(p, r);
+  show("adminResult");
+}
+
+$("btn-back-admin-result").addEventListener("click", () => show("adminCalc"));
+
+/* ============================================================
+   10. ADMIN PANEL - SET PRICES
    ============================================================ */
 const adminOk    = $("admin-ok");
 const adminError = $("admin-error");
@@ -394,6 +588,8 @@ $("btn-confirm").addEventListener("click", async () => {
     return;
   }
 
+  if (!(await checkAdminSession())) return;
+
   busy(true);
   try {
     await setDoc(PARAMS_DOC, {
@@ -411,26 +607,21 @@ $("btn-confirm").addEventListener("click", async () => {
   }
 });
 
-$("btn-signout").addEventListener("click", async () => {
-  await signOut(auth);
-  setResultMode("shop");
-  show("calc");
-});
-
-$("btn-admin-signout").addEventListener("click", async () => {
-  await signOut(auth);
-  setResultMode("shop");
-  show("calc");
-});
+$("btn-back-from-admin").addEventListener("click", () => show("adminMenu"));
+$("btn-signout").addEventListener("click", () => endAdminSession("signout"));
 
 /* ============================================================
-   7. AUTH STATE
+   11. AUTH STATE
+   Firebase restores a saved sign-in on page load. If it is still
+   inside its hour, go straight to the admin menu; otherwise sign
+   out. If the user disappears, leave the admin screens.
    ============================================================ */
-onAuthStateChanged(auth, (user) => {
-  if (!user) {
-    setResultMode("shop");
-    if (screens.adminMenu.classList.contains("is-active") || screens.admin.classList.contains("is-active")) {
-      show("calc");
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    if (await checkAdminSession() && PUBLIC_SCREENS.has(currentScreen())) {
+      show("adminMenu");
     }
+  } else if (!PUBLIC_SCREENS.has(currentScreen())) {
+    show("calc");
   }
 });

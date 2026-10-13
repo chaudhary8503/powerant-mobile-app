@@ -3,8 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#14161a">
+<meta name="theme-color" content="#0d3b5f">
 <title>Rate Calculator</title>
+<link rel="icon" type="image/jpeg" href="powerant-logo.jpg">
+<link rel="apple-touch-icon" href="powerant-logo.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -15,7 +19,7 @@
   <section class="screen is-active" id="screen-calc">
     <header class="bar">
       <span class="bar-spacer"></span>
-      <h1 class="bar-title" id="calc-title">Shop Rate</h1>
+      <h1 class="bar-title">Shop Rate</h1>
       <button class="bar-btn bar-btn-right" id="btn-to-login" aria-label="Admin login">Admin</button>
     </header>
 
@@ -62,20 +66,17 @@
     </footer>
   </section>
 
-  <!-- ================= SCREEN 2 : RESULT ================= -->
+  <!-- ================= SCREEN 2 : SHOP RESULT ================= -->
   <section class="screen" id="screen-result">
     <header class="bar">
       <button class="bar-btn bar-btn-left" id="btn-back-calc" aria-label="Back">&larr; Back</button>
-      <h1 class="bar-title" id="result-title">Minimum to Maximum</h1>
+      <h1 class="bar-title">Minimum to Maximum</h1>
       <span class="bar-spacer"></span>
     </header>
 
     <main class="pad result-pad">
-      <!-- <p class="result-caption">Minimum to maximum</p> -->
-      <p class="result-figure" id="result-single" hidden><span class="result-cur">Rs</span><span id="result-value">0</span></p>
-      <div class="result-range" id="result-range">
+      <div class="result-range">
         <div class="range-value"><span class="range-label">Minimum</span><strong><span class="result-cur">Rs</span><span id="result-min">0</span></strong></div>
-        <!-- <span class="range-separator">to</span> -->
         <div class="range-value"><span class="range-label">Maximum</span><strong><span class="result-cur">Rs</span><span id="result-max">0</span></strong></div>
       </div>
       <p class="result-length" id="result-length"></p>
@@ -83,9 +84,7 @@
       <p class="result-stamp" id="result-stamp"></p>
     </main>
 
-    <footer class="dock">
-      <button class="btn btn-quiet" id="btn-again">Calculate again</button>
-    </footer>
+    <footer class="dock"></footer>
   </section>
 
   <!-- ================= SCREEN 3 : ADMIN MENU ================= -->
@@ -108,12 +107,118 @@
       </button>
     </main>
 
+    <footer class="dock"></footer>
+  </section>
+
+  <!-- ================= SCREEN 4 : ADMIN FACTORY CALCULATOR ================= -->
+  <section class="screen" id="screen-admin-calc">
+    <header class="bar">
+      <button class="bar-btn bar-btn-left" id="btn-back-from-admin-calc" aria-label="Back">&larr; Back</button>
+      <h1 class="bar-title">Factory Rate</h1>
+      <span class="bar-spacer"></span>
+    </header>
+
+    <main class="pad">
+      <p class="lede">Enter your requirement</p>
+
+      <div class="toggle" role="group" aria-label="Wire type">
+        <button type="button" class="toggle-btn is-on" data-type="flexible">Flexible</button>
+        <button type="button" class="toggle-btn" data-type="standard">Standard</button>
+      </div>
+
+      <label class="field">
+        <span class="field-label">Wires</span>
+        <input type="number" id="in-admin-wires" inputmode="numeric" placeholder="0" autocomplete="off">
+      </label>
+
+      <label class="field">
+        <span class="field-label">Thousands</span>
+        <input type="number" id="in-admin-thousands" inputmode="numeric" placeholder="0" autocomplete="off">
+      </label>
+
+      <label class="field">
+        <span class="field-label">MM</span>
+        <input type="number" id="in-admin-mm" inputmode="decimal" step="any" placeholder="0" autocomplete="off">
+      </label>
+
+      <label class="field">
+        <span class="field-label">Core</span>
+        <input type="number" id="in-admin-core" inputmode="numeric" placeholder="1" autocomplete="off">
+        <span class="field-note">1, 2, 3, 4 or 5</span>
+      </label>
+
+      <label class="field">
+        <span class="field-label">Feet</span>
+        <input type="number" id="in-admin-feet" inputmode="numeric" value="300" autocomplete="off">
+        <span class="field-note">One coil is 300 feet</span>
+      </label>
+
+      <p class="msg msg-error" id="admin-calc-error" hidden></p>
+    </main>
+
     <footer class="dock">
-      <button class="btn btn-quiet" id="btn-back-from-admin-menu">Back to calculator</button>
+      <button class="btn btn-go" id="btn-admin-ok">OK</button>
     </footer>
   </section>
 
-  <!-- ================= SCREEN 4 : ADMIN LOGIN ================= -->
+  <!-- ================= SCREEN 4b : ADMIN FACTORY RESULT ================= -->
+  <section class="screen" id="screen-admin-result">
+    <header class="bar">
+      <button class="bar-btn bar-btn-left" id="btn-back-admin-result" aria-label="Back">&larr; Back</button>
+      <h1 class="bar-title">Factory Rate</h1>
+      <span class="bar-spacer"></span>
+    </header>
+
+    <main class="pad result-pad">
+      <p class="result-figure"><span class="result-cur">Rs</span><span id="admin-result-value">0</span></p>
+      <p class="result-length" id="admin-result-length"></p>
+      <div class="result-recap" id="admin-result-recap"></div>
+
+      <div class="result-breakdown" id="result-breakdown">
+        <div class="breakdown-row">
+          <div class="breakdown-line"><span>Copper</span><span id="bd-copper">Rs 0</span></div>
+          <p class="breakdown-calc" id="bd-copper-calc"></p>
+        </div>
+        <div class="breakdown-row">
+          <div class="breakdown-line"><span>PVC</span><span id="bd-pvc">Rs 0</span></div>
+          <p class="breakdown-calc" id="bd-pvc-calc"></p>
+        </div>
+        <div class="breakdown-row">
+          <div class="breakdown-line"><span>Rope</span><span id="bd-rope">Rs 0</span></div>
+          <p class="breakdown-calc" id="bd-rope-calc"></p>
+        </div>
+        <div class="breakdown-row">
+          <div class="breakdown-line"><span>Drawing charge</span><span id="bd-draw">Rs 0</span></div>
+          <p class="breakdown-calc" id="bd-draw-calc"></p>
+        </div>
+        <div class="breakdown-row">
+          <div class="breakdown-line"><span>Electricity</span><span id="bd-elec">Rs 0</span></div>
+          <p class="breakdown-calc" id="bd-elec-calc"></p>
+        </div>
+        <div class="breakdown-row">
+          <div class="breakdown-line"><span>Labour</span><span id="bd-labour">Rs 0</span></div>
+          <p class="breakdown-calc" id="bd-labour-calc"></p>
+        </div>
+        <div class="breakdown-row">
+          <div class="breakdown-line"><span>Other material</span><span id="bd-other">Rs 0</span></div>
+          <p class="breakdown-calc" id="bd-other-calc"></p>
+        </div>
+        <div class="breakdown-row breakdown-total">
+          <div class="breakdown-line"><span>Factory cost</span><span id="bd-factorycost">Rs 0</span></div>
+        </div>
+        <div class="breakdown-row">
+          <div class="breakdown-line"><span>Profit margin (<span id="bd-marginpct">0</span>%)</span><span id="bd-margin">Rs 0</span></div>
+          <p class="breakdown-calc" id="bd-margin-calc"></p>
+        </div>
+      </div>
+
+      <p class="result-stamp" id="admin-result-stamp"></p>
+    </main>
+
+    <footer class="dock"></footer>
+  </section>
+
+  <!-- ================= SCREEN 5 : ADMIN LOGIN ================= -->
   <section class="screen" id="screen-login">
     <header class="bar">
       <button class="bar-btn bar-btn-left" id="btn-back-from-login" aria-label="Back">&larr; Back</button>
@@ -220,6 +325,16 @@
   </section>
 
   <div id="veil"><span class="veil-dot"></span></div>
+
+  <div class="modal" id="feet-confirm">
+    <div class="modal-box">
+      <p class="modal-text">This is for <strong id="feet-confirm-value">0</strong> feet.</p>
+      <div class="modal-actions">
+        <button class="btn btn-go" id="btn-feet-ok">OK</button>
+        <button class="btn btn-quiet" id="btn-feet-back">Back</button>
+      </div>
+    </div>
+  </div>
 
 </div>
 
