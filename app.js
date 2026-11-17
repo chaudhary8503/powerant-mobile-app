@@ -59,6 +59,13 @@ const FEET_TO_METRE = 0.3048;
    2. THE CALCULATION
    ============================================================ */
 
+// Actual copper cross-section of ONE core, in mm² - the "mm.2"
+// column of the factory sheet. Shown for reference only; it does
+// not feed into the price.
+function actualMm({ thousands, wires }) {
+  return (thousands * thousands * wires * 507) / 1000000;
+}
+
 function copperPerCoil({ thousands, wires, core }) {
   return (thousands * thousands * wires * core * 330) / 800000;
 }
@@ -306,10 +313,15 @@ function stampLabel(data) {
     : "";
 }
 
-function renderRateBreakdown(p, r) {
+function renderRateBreakdown(p, r, v) {
   const rs  = (n) => "Rs " + money(Math.round(n));
   const kg  = (n) => n.toLocaleString("en-PK", { maximumFractionDigits: 2 });
   const pct = (n) => n.toLocaleString("en-PK", { maximumFractionDigits: 2 });
+
+  const mm = kg(actualMm(v)) + " mm²";
+  $("bd-mm").textContent = mm;
+  $("bd-mm-calc").textContent =
+    `${v.thousands} × ${v.thousands} × ${v.wires} × 507 ÷ 1,000,000 = ${mm}`;
 
   $("bd-copper").textContent = rs(r.copperCost);
   $("bd-copper-calc").textContent =
@@ -519,7 +531,7 @@ function showFactoryResult(v, p, r, data) {
   $("admin-result-length").textContent = lengthLabel(v);
   $("admin-result-recap").innerHTML    = recapHtml(v);
   $("admin-result-stamp").textContent  = stampLabel(data);
-  renderRateBreakdown(p, r);
+  renderRateBreakdown(p, r, v);
   show("adminResult");
 }
 
